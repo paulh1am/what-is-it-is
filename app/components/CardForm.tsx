@@ -190,12 +190,12 @@ export default function CardForm() {
               >
                 <div className="flex items-baseline gap-2">
                   <span
-                    className="font-bold text-base shrink-0"
-                    style={{ color: "var(--text)", fontFamily: "var(--font-sans)" }}
+                    className="font-bold shrink-0"
+                    style={{ color: "var(--text)", fontFamily: "var(--font-sans)", fontSize: "1.6rem" }}
                   >
                     {label}
                   </span>
-                  <span style={{ color: "var(--text)", fontFamily: "var(--font-hand)", fontSize: "1.2rem" }}>
+                  <span style={{ color: "var(--text)", fontFamily: "var(--font-hand)", fontSize: "1.9rem", lineHeight: 1.3 }}>
                     {card.text}
                   </span>
                 </div>
@@ -252,8 +252,8 @@ export default function CardForm() {
             </div>
             <div className="flex items-baseline gap-2">
               <span
-                className="font-bold text-lg shrink-0"
-                style={{ color: "var(--text)", fontFamily: "var(--font-sans)", position: "relative", top: "-10px" }}
+                className="font-bold shrink-0"
+                style={{ color: "var(--text)", fontFamily: "var(--font-sans)", fontSize: "1.8rem", position: "relative", top: "-10px" }}
               >
                 {label}
               </span>
@@ -265,7 +265,7 @@ export default function CardForm() {
                 onKeyDown={handleKeyDown}
                 placeholder={isItPhase ? "..." : "...?"}
                 className="flex-1 bg-transparent outline-none placeholder-opacity-40 resize-none overflow-hidden"
-                style={{ color: "var(--text)", fontFamily: "var(--font-hand)", fontSize: "1.25rem", lineHeight: "1.5", caretColor: cardColorDark, position: "relative", top: "-10px" }}
+                style={{ color: "var(--text)", fontFamily: "var(--font-hand)", fontSize: "2rem", lineHeight: "1.4", caretColor: cardColorDark, position: "relative", top: "-10px" }}
               />
             </div>
             <div className="flex items-center mt-4">
