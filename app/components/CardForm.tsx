@@ -32,7 +32,7 @@ export default function CardForm() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [whatCards, setWhatCards] = useState<string[]>([]);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const doneCount = cards.filter((c) => c.done).length;
   const totalCards = cards.length;
@@ -45,6 +45,10 @@ export default function CardForm() {
     setCards((prev) =>
       prev.map((c, i) => (i === activeIndex ? { ...c, text: value } : c))
     );
+    if (inputRef.current) {
+      inputRef.current.style.height = "auto";
+      inputRef.current.style.height = inputRef.current.scrollHeight + "px";
+    }
   }
 
   function handleConfirm() {
@@ -119,6 +123,22 @@ export default function CardForm() {
   const label = isItPhase ? "it is" : "what is";
   const allDone = cards.every((c) => c.done);
 
+  const lineSpacing = 26;
+  const ruledLineColor = isItPhase ? "rgba(70, 100, 140, 0.28)" : "rgba(70, 110, 85, 0.28)";
+  const ghostRuledLineColor = isItPhase ? "rgba(70, 100, 140, 0.12)" : "rgba(70, 110, 85, 0.12)";
+  const marginColor = "rgba(185, 60, 55, 0.35)";
+  const ghostMarginColor = "rgba(185, 60, 55, 0.15)";
+  const marginGradient = isItPhase
+    ? `linear-gradient(to left, transparent 10px, ${marginColor} 10px, ${marginColor} 11px, transparent 11px)`
+    : `linear-gradient(to right, transparent 10px, ${marginColor} 10px, ${marginColor} 11px, transparent 11px)`;
+  const ghostMarginGradient = isItPhase
+    ? `linear-gradient(to left, transparent 10px, ${ghostMarginColor} 10px, ${ghostMarginColor} 11px, transparent 11px)`
+    : `linear-gradient(to right, transparent 10px, ${ghostMarginColor} 10px, ${ghostMarginColor} 11px, transparent 11px)`;
+  const linesGradient = `repeating-linear-gradient(to bottom, transparent 0px, transparent ${lineSpacing - 1}px, ${ruledLineColor} ${lineSpacing - 1}px, ${ruledLineColor} ${lineSpacing}px)`;
+  const ghostLinesGradient = `repeating-linear-gradient(to bottom, transparent 0px, transparent ${lineSpacing - 1}px, ${ghostRuledLineColor} ${lineSpacing - 1}px, ${ghostRuledLineColor} ${lineSpacing}px)`;
+  const notebookBg = `${marginGradient}, ${linesGradient}, ${cardColor}`;
+  const cardMinHeight = "130px";
+
   return (
     <div className="flex flex-col items-center min-h-screen px-4 pt-16 pb-32">
       {/* Header */}
@@ -159,10 +179,11 @@ export default function CardForm() {
                 key={i}
                 className="w-full rounded-xl px-5 py-4 cursor-pointer transition-opacity hover:opacity-80"
                 style={{
-                  background: cardColor,
-                  border: `1px solid ${cardColorDark}`,
+                  background: notebookBg,
+                  border: `0.5px solid ${cardColorDark}`,
                   position: "relative",
                   zIndex: 20,
+                  minHeight: cardMinHeight,
                 }}
                 onClick={() => handleEditCard(i)}
               >
@@ -173,7 +194,7 @@ export default function CardForm() {
                   >
                     {label}
                   </span>
-                  <span style={{ color: "var(--text)", fontSize: "1.05rem" }}>
+                  <span style={{ color: "var(--text)", fontFamily: "var(--font-hand)", fontSize: "1.2rem" }}>
                     {card.text}
                   </span>
                 </div>
@@ -200,7 +221,7 @@ export default function CardForm() {
                   key={`ghost-${i}`}
                   className="absolute rounded-xl"
                   style={{
-                    background: `color-mix(in srgb, ${cardColor} ${55 - Math.min(i, 1) * 20}%, var(--bg))`,
+                    background: `${ghostMarginGradient}, ${ghostLinesGradient}, color-mix(in srgb, ${cardColor} ${55 - Math.min(i, 1) * 20}%, var(--bg))`,
                     border: `1px solid color-mix(in srgb, ${cardColorDark} ${55 - Math.min(i, 1) * 20}%, var(--bg))`,
                     top: `${offset}px`,
                     left: `${-offset}px`,
@@ -214,35 +235,36 @@ export default function CardForm() {
           <div
             className="w-full rounded-xl px-5 py-5"
             style={{
-              background: cardColor,
+              background: notebookBg,
               border: `1px solid ${cardColorDark}`,
               boxShadow: `0 4px 20px var(--card-shadow)`,
               position: "relative",
               zIndex: 30,
+              minHeight: cardMinHeight,
             }}
           >
             <div
               className="text-xs mb-3"
-              style={{ color: "var(--text-muted)" }}
+              style={{ color: "var(--text-muted)", marginTop: "-10px" }}
             >
               finish the sentence
             </div>
             <div className="flex items-baseline gap-2">
               <span
                 className="font-bold text-lg shrink-0"
-                style={{ color: "var(--text)", fontFamily: "var(--font-sans)" }}
+                style={{ color: "var(--text)", fontFamily: "var(--font-sans)", position: "relative", top: "-10px" }}
               >
                 {label}
               </span>
-              <input
+              <textarea
                 ref={inputRef}
-                type="text"
+                rows={1}
                 value={cards[activeIndex]?.text ?? ""}
                 onChange={(e) => handleTextChange(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="...?"
-                className="flex-1 bg-transparent outline-none text-lg placeholder-opacity-40"
-                style={{ color: "var(--text)", fontFamily: "var(--font-sans)", caretColor: cardColorDark }}
+                className="flex-1 bg-transparent outline-none placeholder-opacity-40 resize-none overflow-hidden"
+                style={{ color: "var(--text)", fontFamily: "var(--font-hand)", fontSize: "1.25rem", lineHeight: "1.5", caretColor: cardColorDark, position: "relative", top: "-10px" }}
               />
             </div>
             <div className="flex items-center mt-4">
