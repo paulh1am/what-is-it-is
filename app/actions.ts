@@ -1,8 +1,8 @@
 "use server";
 
 import { db } from "@/db";
-import { submissions, whatIs, itIs, poems } from "@/db/schema";
-import { eq, gte, or } from "drizzle-orm";
+import { gameSessions, submissions, whatIs, itIs, poems } from "@/db/schema";
+import { eq, gte, or, inArray } from "drizzle-orm";
 
 // ---- Types ----
 
@@ -10,6 +10,7 @@ export type CardBatch = {
   sessionToken: string;
   whatIsCards: string[];
   itIsCards: string[];
+  gameSessionId?: number;
 };
 
 // ---- Validation ----
@@ -31,7 +32,10 @@ export async function saveSubmission(batch: CardBatch) {
   }
   const [submission] = await db
     .insert(submissions)
-    .values({ sessionToken: batch.sessionToken })
+    .values({
+      sessionToken: batch.sessionToken,
+      gameSessionId: batch.gameSessionId ?? null,
+    })
     .returning();
 
   await db.insert(whatIs).values(
@@ -76,14 +80,39 @@ export async function getPairingPool(window: TimeWindow = "all") {
   return { whatIsPool, itIsPool };
 }
 
+async function getSessionPool(gameSessionId: number) {
+  const sessionSubmissionIds = (
+    await db
+      .select({ id: submissions.id })
+      .from(submissions)
+      .where(eq(submissions.gameSessionId, gameSessionId))
+  ).map((r) => r.id);
+
+  if (sessionSubmissionIds.length === 0) return { whatIsPool: [], itIsPool: [] };
+
+  const whatIsPool = await db
+    .select()
+    .from(whatIs)
+    .where(inArray(whatIs.submissionId, sessionSubmissionIds));
+
+  const itIsPool = await db
+    .select()
+    .from(itIs)
+    .where(inArray(itIs.submissionId, sessionSubmissionIds));
+
+  return { whatIsPool, itIsPool };
+}
+
 // ---- 3.4 generatePoems ----
 
 export async function generatePoems(
   submissionId: number,
   window: TimeWindow = "all",
-  allowDoubles: boolean = true
+  gameSessionId?: number
 ) {
-  const { whatIsPool, itIsPool } = await getPairingPool(window);
+  const { whatIsPool, itIsPool } = gameSessionId
+    ? await getSessionPool(gameSessionId)
+    : await getPairingPool(window);
 
   const myWhatIs = await db
     .select()
@@ -95,14 +124,12 @@ export async function generatePoems(
     .from(itIs)
     .where(eq(itIs.submissionId, submissionId));
 
-  // Filter pool to exclude the user's own cards if doubles not allowed
-  const whatIsCandidates = allowDoubles
-    ? whatIsPool
-    : whatIsPool.filter((w) => w.submissionId !== submissionId);
+  // Always prefer other players' cards; fall back to own only if no others exist in the pool
+  const othersWhatIs = whatIsPool.filter((w) => w.submissionId !== submissionId);
+  const othersItIs = itIsPool.filter((i) => i.submissionId !== submissionId);
 
-  const itIsCandidates = allowDoubles
-    ? itIsPool
-    : itIsPool.filter((i) => i.submissionId !== submissionId);
+  const whatIsCandidates = othersWhatIs.length > 0 ? othersWhatIs : whatIsPool;
+  const itIsCandidates = othersItIs.length > 0 ? othersItIs : itIsPool;
 
   const shuffle = <T>(arr: T[]): T[] =>
     [...arr].sort(() => Math.random() - 0.5);
@@ -112,20 +139,40 @@ export async function generatePoems(
 
   const pairings: { whatIsId: number; itIsId: number }[] = [];
 
-  // Pair each of the user's "what is" with a random "it is" from the pool
   myWhatIs.forEach((w, i) => {
     const match = shuffledItIs[i % shuffledItIs.length];
     if (match) pairings.push({ whatIsId: w.id, itIsId: match.id });
   });
 
-  // Pair each of the user's "it is" with a random "what is" from the pool
   myItIs.forEach((it, i) => {
     const match = shuffledWhatIs[i % shuffledWhatIs.length];
     if (match) pairings.push({ whatIsId: match.id, itIsId: it.id });
   });
 
+  if (pairings.length === 0) return [];
   const inserted = await db.insert(poems).values(pairings).returning();
   return inserted;
+}
+
+// ---- 3.4b reshufflePoems ----
+
+export async function reshufflePoems(submissionId: number, window: TimeWindow = "all") {
+  const myWhatIsIds = (
+    await db.select({ id: whatIs.id }).from(whatIs).where(eq(whatIs.submissionId, submissionId))
+  ).map((r) => r.id);
+
+  const myItIsIds = (
+    await db.select({ id: itIs.id }).from(itIs).where(eq(itIs.submissionId, submissionId))
+  ).map((r) => r.id);
+
+  const conditions = [];
+  if (myWhatIsIds.length > 0) conditions.push(inArray(poems.whatIsId, myWhatIsIds));
+  if (myItIsIds.length > 0) conditions.push(inArray(poems.itIsId, myItIsIds));
+  if (conditions.length > 0) {
+    await db.delete(poems).where(or(...conditions));
+  }
+
+  return generatePoems(submissionId, window);
 }
 
 // ---- 3.5 getResults ----
@@ -160,4 +207,116 @@ export async function upvotePoem(poemId: number, currentLikes: number) {
     .update(poems)
     .set({ likes: currentLikes + 1 })
     .where(eq(poems.id, poemId));
+}
+
+// ---- 6.3 createSession ----
+
+const CODE_CHARS = "BCDFGHJKMNPQRSTVWXYZ234679";
+
+function generateCode(length = 6): string {
+  return Array.from(
+    { length },
+    () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]
+  ).join("");
+}
+
+export async function createSession(): Promise<string> {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const code = generateCode();
+    const existing = await db
+      .select({ id: gameSessions.id })
+      .from(gameSessions)
+      .where(eq(gameSessions.code, code));
+    if (existing.length === 0) {
+      await db.insert(gameSessions).values({ code });
+      return code;
+    }
+  }
+  throw new Error("Could not generate a unique session code.");
+}
+
+// ---- 6.4 getSessionStatus ----
+
+export async function getSessionStatus(code: string) {
+  const [session] = await db
+    .select()
+    .from(gameSessions)
+    .where(eq(gameSessions.code, code));
+
+  if (!session) return null;
+
+  const players = await db
+    .select({ id: submissions.id })
+    .from(submissions)
+    .where(eq(submissions.gameSessionId, session.id));
+
+  return {
+    sessionId: session.id,
+    status: session.status as "waiting" | "active",
+    playerCount: players.length,
+  };
+}
+
+// ---- 6.5 startSession ----
+
+export async function startSession(code: string) {
+  const [session] = await db
+    .select()
+    .from(gameSessions)
+    .where(eq(gameSessions.code, code));
+
+  if (!session) throw new Error("Session not found.");
+
+  await db
+    .update(gameSessions)
+    .set({ status: "active" })
+    .where(eq(gameSessions.id, session.id));
+
+  const sessionSubmissions = await db
+    .select()
+    .from(submissions)
+    .where(eq(submissions.gameSessionId, session.id));
+
+  for (const sub of sessionSubmissions) {
+    await generatePoems(sub.id, "all", session.id);
+  }
+
+  return session.id;
+}
+
+// ---- 6.x getSessionPoems ----
+
+export async function getSessionPoems(code: string) {
+  const [session] = await db
+    .select()
+    .from(gameSessions)
+    .where(eq(gameSessions.code, code));
+
+  if (!session) return [];
+
+  const sessionSubmissionIds = (
+    await db
+      .select({ id: submissions.id })
+      .from(submissions)
+      .where(eq(submissions.gameSessionId, session.id))
+  ).map((r) => r.id);
+
+  if (sessionSubmissionIds.length === 0) return [];
+
+  return db
+    .select({
+      poemId: poems.id,
+      whatIsText: whatIs.text,
+      itIsText: itIs.text,
+    })
+    .from(poems)
+    .innerJoin(whatIs, eq(poems.whatIsId, whatIs.id))
+    .innerJoin(itIs, eq(poems.itIsId, itIs.id))
+    .where(
+      or(
+        inArray(whatIs.submissionId, sessionSubmissionIds),
+        inArray(itIs.submissionId, sessionSubmissionIds)
+      )
+    )
+    .orderBy(poems.id);
 }

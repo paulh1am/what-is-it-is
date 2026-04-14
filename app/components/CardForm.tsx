@@ -5,6 +5,17 @@ import { useRouter } from "next/navigation";
 import { saveSubmission, generatePoems } from "@/app/actions";
 
 type Phase = "what" | "it";
+type TimeWindow = "all" | "year" | "month" | "week";
+
+const COUNT_OPTIONS = [4, 6, 8] as const;
+type CountOption = typeof COUNT_OPTIONS[number];
+
+const TIME_OPTIONS: { value: TimeWindow; label: string }[] = [
+  { value: "all", label: "all time" },
+  { value: "year", label: "year" },
+  { value: "month", label: "month" },
+  { value: "week", label: "week" },
+];
 
 interface Card {
   text: string;
@@ -20,13 +31,19 @@ function getOrCreateSessionToken(): string {
   return token;
 }
 
-const DEFAULT_COUNT = 4;
+interface CardFormProps {
+  gameSessionId?: number;
+  onSubmitComplete?: (submissionId: number) => void;
+}
 
-export default function CardForm() {
+export default function CardForm({ gameSessionId, onSubmitComplete }: CardFormProps = {}) {
   const router = useRouter();
+  const sessionMode = !!gameSessionId;
   const [phase, setPhase] = useState<Phase>("what");
+  const [cardCount, setCardCount] = useState<CountOption>(4);
+  const [timeWindow, setTimeWindow] = useState<TimeWindow>("all");
   const [cards, setCards] = useState<Card[]>(
-    Array.from({ length: DEFAULT_COUNT }, () => ({ text: "", done: false }))
+    Array.from({ length: 4 }, () => ({ text: "", done: false }))
   );
   const [activeIndex, setActiveIndex] = useState(0);
   const [submitting, setSubmitting] = useState(false);
@@ -84,12 +101,19 @@ export default function CardForm() {
     setActiveIndex(index);
   }
 
+  function handleCountChange(count: CountOption) {
+    if (doneCount > 0 || phase !== "what") return;
+    setCardCount(count);
+    setCards(Array.from({ length: count }, () => ({ text: "", done: false })));
+    setActiveIndex(0);
+  }
+
   function handlePhaseSubmit() {
     if (doneCount === 0) return;
     if (phase === "what") {
       setWhatCards(cards.filter((c) => c.done).map((c) => c.text));
       setPhase("it");
-      setCards(Array.from({ length: DEFAULT_COUNT }, () => ({ text: "", done: false })));
+      setCards(Array.from({ length: cardCount }, () => ({ text: "", done: false })));
       setActiveIndex(0);
     } else {
       handleFinalSubmit();
@@ -107,10 +131,15 @@ export default function CardForm() {
         sessionToken,
         whatIsCards: whatCards,
         itIsCards,
+        gameSessionId,
       });
 
-      await generatePoems(submissionId);
-      router.push(`/results?id=${submissionId}`);
+      if (sessionMode) {
+        onSubmitComplete?.(submissionId);
+      } else {
+        await generatePoems(submissionId, timeWindow);
+        router.push(`/results?id=${submissionId}&window=${timeWindow}`);
+      }
     } catch (err) {
       console.error(err);
       setError("Something went wrong. Please try again.");
@@ -141,19 +170,78 @@ export default function CardForm() {
   const cardMinHeight = "130px";
 
   return (
-    <div className="flex flex-col items-center min-h-screen px-4 pt-16 pb-32">
-      {/* Header */}
-      <div className="mb-12 text-center">
-        <h1
-          className="text-3xl mb-1 tracking-tight"
-          style={{ fontFamily: "var(--font-serif)", color: "var(--text)" }}
+    <div className={`flex flex-col items-center w-full ${sessionMode ? "pb-8" : "min-h-screen px-4 pt-16 pb-32"}`}>
+      {/* Header — solo mode only */}
+      {!sessionMode && (
+        <div className="mb-12 text-center">
+          <h1
+            className="text-3xl mb-1 tracking-tight"
+            style={{ fontFamily: "var(--font-serif)", color: "var(--text)" }}
+          >
+            what is / it is
+          </h1>
+          <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", fontStyle: "italic" }}>
+            {isItPhase ? "now fill in some definitions" : "fill in your cards with whatever question comes to mind"}
+          </p>
+        </div>
+      )}
+
+      {/* Controls bar — solo mode only */}
+      {!sessionMode && (
+        <div
+          className="w-full max-w-sm mb-8 flex gap-5 items-start"
+          style={{ fontSize: "0.75rem" }}
         >
-          what is / it is
-        </h1>
-        <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", fontStyle: "italic" }}>
-          {isItPhase ? "now fill in some definitions" : "fill in your cards with whatever question comes to mind"}
-        </p>
-      </div>
+          {/* Card count */}
+          <div className="flex flex-col items-center gap-1.5">
+            <span style={{ color: "var(--text-muted)", fontFamily: "var(--font-serif)" }}>cards</span>
+            <div className="flex gap-1">
+              {COUNT_OPTIONS.map((n) => (
+                <button
+                  key={n}
+                  onClick={() => handleCountChange(n)}
+                  disabled={doneCount > 0 || phase !== "what"}
+                  className="w-6 h-6 rounded-full transition-all"
+                  style={{
+                    background: cardCount === n ? "var(--text)" : "transparent",
+                    color: cardCount === n ? "var(--bg)" : "var(--text-muted)",
+                    border: `1px solid ${cardCount === n ? "var(--text)" : "var(--border)"}`,
+                    fontFamily: "var(--font-sans)",
+                    opacity: (doneCount > 0 || phase !== "what") && cardCount !== n ? 0.35 : 1,
+                    cursor: doneCount > 0 || phase !== "what" ? "default" : "pointer",
+                  }}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ width: "1px", alignSelf: "stretch", background: "var(--border)", marginTop: "2px" }} />
+
+          {/* Time window */}
+          <div className="flex flex-col items-center gap-1.5">
+            <span style={{ color: "var(--text-muted)", fontFamily: "var(--font-serif)" }}>cards from</span>
+            <div className="flex gap-1">
+              {TIME_OPTIONS.map(({ value, label: tLabel }) => (
+                <button
+                  key={value}
+                  onClick={() => setTimeWindow(value)}
+                  className="px-2 h-6 rounded-full transition-all"
+                  style={{
+                    background: timeWindow === value ? "var(--text)" : "transparent",
+                    color: timeWindow === value ? "var(--bg)" : "var(--text-muted)",
+                    border: `1px solid ${timeWindow === value ? "var(--text)" : "var(--border)"}`,
+                    fontFamily: "var(--font-sans)",
+                  }}
+                >
+                  {tLabel}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Progress */}
       <div className="w-full max-w-sm mb-8">
@@ -296,9 +384,9 @@ export default function CardForm() {
           }}
         >
           {submitting
-            ? "pairing..."
+            ? sessionMode ? "submitting..." : "pairing..."
             : isItPhase
-            ? `see the results →`
+            ? sessionMode ? `submit cards →` : `see the results →`
             : `submit ${doneCount} card${doneCount !== 1 ? "s" : ""}`}
         </button>
       </div>

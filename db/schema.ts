@@ -1,8 +1,16 @@
 import { pgTable, serial, text, boolean, integer, timestamp } from "drizzle-orm/pg-core";
 
+export const gameSessions = pgTable("game_sessions", {
+  id: serial("id").primaryKey(),
+  code: text("code").unique().notNull(),
+  status: text("status").notNull().default("waiting"), // waiting | active
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const submissions = pgTable("submissions", {
   id: serial("id").primaryKey(),
   sessionToken: text("session_token").notNull(),
+  gameSessionId: integer("game_session_id").references(() => gameSessions.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

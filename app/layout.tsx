@@ -33,7 +33,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${lora.variable} ${sourceSans.variable} ${patrickHand.variable}`}>
+      <body className={`${lora.variable} ${sourceSans.variable} ${patrickHand.variable}`} suppressHydrationWarning>
         {children}
       </body>
     </html>
