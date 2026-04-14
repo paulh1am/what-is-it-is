@@ -130,7 +130,7 @@ export default function CardForm() {
           what is / it is
         </h1>
         <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", fontStyle: "italic" }}>
-          {isItPhase ? "now fill in your it is cards" : "fill in your cards with whatever question comes to mind"}
+          {isItPhase ? "now fill in some definitions" : "fill in your cards with whatever question comes to mind"}
         </p>
       </div>
 
@@ -149,25 +149,7 @@ export default function CardForm() {
       </div>
 
       {/* Card stack */}
-      <div className="relative w-full max-w-sm" style={{ minHeight: "200px" }}>
-        {/* Ghost cards behind */}
-        {[...Array(Math.max(0, totalCards - doneCount - 1))].map((_, i) => (
-          <div
-            key={`ghost-${i}`}
-            className="absolute rounded-xl"
-            style={{
-              background: cardColor,
-              height: "160px",
-              top: `${(i + 1) * 6}px`,
-              width: `calc(100% + ${(i + 1) * 6}px)`,
-              marginLeft: `${(i + 1) * -3}px`,
-              opacity: 0.4 - i * 0.1,
-              zIndex: 10 - i,
-              border: `1px solid ${cardColorDark}`,
-            }}
-          />
-        ))}
-
+      <div className="w-full max-w-sm">
         {/* Completed cards */}
         <div className="flex flex-col gap-3 mb-3">
           {cards.map((card, i) => {
@@ -209,6 +191,26 @@ export default function CardForm() {
 
         {/* Active input card */}
         {!allDone && (
+          <div className="relative">
+            {/* Ghost cards stacked behind active card */}
+            {[...Array(Math.min(4, Math.max(0, totalCards - doneCount - 1)))].map((_, i) => {
+              const offset = Math.round((i + 1) * (5 - i / 2));
+              return (
+                <div
+                  key={`ghost-${i}`}
+                  className="absolute rounded-xl"
+                  style={{
+                    background: `color-mix(in srgb, ${cardColor} ${55 - Math.min(i, 1) * 20}%, var(--bg))`,
+                    border: `1px solid color-mix(in srgb, ${cardColorDark} ${55 - Math.min(i, 1) * 20}%, var(--bg))`,
+                    top: `${offset}px`,
+                    left: `${-offset}px`,
+                    right: `${offset}px`,
+                    bottom: `${-offset}px`,
+                    zIndex: 20 - i,
+                  }}
+                />
+              );
+            })}
           <div
             className="w-full rounded-xl px-5 py-5"
             style={{
@@ -254,6 +256,7 @@ export default function CardForm() {
               </button>
             </div>
           </div>
+          </div>
         )}
       </div>
 
@@ -272,7 +275,7 @@ export default function CardForm() {
           {submitting
             ? "pairing..."
             : isItPhase
-            ? `see poems →`
+            ? `see the results →`
             : `submit ${doneCount} card${doneCount !== 1 ? "s" : ""}`}
         </button>
       </div>
