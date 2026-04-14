@@ -30,7 +30,7 @@ export default async function ResultsPage({
     );
   }
 
-  const results = await getResults(submissionId);
+  const results = await getResults(submissionId, !!session);
 
   return (
     <main className="flex flex-col items-center min-h-screen px-4 pt-16 pb-32" style={{ background: "var(--bg)" }}>

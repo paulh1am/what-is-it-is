@@ -103,59 +103,57 @@ async function getSessionPool(gameSessionId: number) {
   return { whatIsPool, itIsPool };
 }
 
-// ---- 3.4 generatePoems ----
+const shuffle = <T>(arr: T[]): T[] => [...arr].sort(() => Math.random() - 0.5);
 
-export async function generatePoems(
-  submissionId: number,
-  window: TimeWindow = "all",
-  gameSessionId?: number
-) {
-  const { itIsPool } = gameSessionId
-    ? await getSessionPool(gameSessionId)
-    : await getPairingPool(window);
+// ---- 3.4 generatePoems (solo) ----
+// Each of the player's what-is cards is paired with one it-is from the DB pool,
+// and each of their it-is cards is paired with one what-is from the DB pool.
+// No card from the pool is used twice.
 
-  const myWhatIs = await db
-    .select()
-    .from(whatIs)
-    .where(eq(whatIs.submissionId, submissionId));
+export async function generatePoems(submissionId: number, window: TimeWindow = "all") {
+  const { whatIsPool, itIsPool } = await getPairingPool(window);
 
-  const othersItIs = itIsPool.filter((i) => i.submissionId !== submissionId);
+  const myWhatIs = await db.select().from(whatIs).where(eq(whatIs.submissionId, submissionId));
+  const myItIs = await db.select().from(itIs).where(eq(itIs.submissionId, submissionId));
 
-  const shuffle = <T>(arr: T[]): T[] =>
-    [...arr].sort(() => Math.random() - 0.5);
-
-  const shuffledOthers = shuffle(othersItIs);
-  const shuffledAll = shuffle(itIsPool);
-
-  // In session mode: blend based on player count so cross-pollination feels intentional.
-  // 2-player game → prefer others 3/4 of draws; 3+ players → 1/2.
-  // Solo mode → always prefer others, fall back to own only if pool is empty.
-  const otherPlayerCount = new Set(othersItIs.map((i) => i.submissionId)).size;
-  const otherRatio = !gameSessionId
-    ? 1
-    : otherPlayerCount === 1
-    ? 0.75
-    : 0.5;
-
-  // Build a deduplicated pool of the right size:
-  // take ~otherRatio of slots from others, fill the rest from remaining cards, then shuffle.
-  const targetOtherCount = Math.round(myWhatIs.length * otherRatio);
-  const fromOthers = shuffledOthers.slice(0, Math.min(targetOtherCount, shuffledOthers.length));
-  const usedIds = new Set(fromOthers.map((c) => c.id));
-  const fromRemainder = shuffledAll.filter((c) => !usedIds.has(c.id));
-  const needed = Math.max(0, myWhatIs.length - fromOthers.length);
-  const finalPool = shuffle([...fromOthers, ...fromRemainder.slice(0, needed)]);
+  // Exclude the player's own cards from the pools they draw from
+  const poolItIs = shuffle(itIsPool.filter((c) => c.submissionId !== submissionId));
+  const poolWhatIs = shuffle(whatIsPool.filter((c) => c.submissionId !== submissionId));
 
   const pairings: { whatIsId: number; itIsId: number }[] = [];
 
+  // my what-is + pool it-is (1-to-1, no wrapping)
   myWhatIs.forEach((w, i) => {
-    const match = finalPool[i];
-    if (match) pairings.push({ whatIsId: w.id, itIsId: match.id });
+    if (poolItIs[i]) pairings.push({ whatIsId: w.id, itIsId: poolItIs[i].id });
+  });
+
+  // my it-is + pool what-is (1-to-1, no wrapping)
+  myItIs.forEach((it, i) => {
+    if (poolWhatIs[i]) pairings.push({ whatIsId: poolWhatIs[i].id, itIsId: it.id });
   });
 
   if (pairings.length === 0) return [];
-  const inserted = await db.insert(poems).values(pairings).returning();
-  return inserted;
+  return db.insert(poems).values(pairings).returning();
+}
+
+// ---- 3.4c generateSessionPoems (live game) ----
+// Shuffle ALL what-is and ALL it-is from the entire session, pair them 1-to-1.
+// Called once when the host starts the game — no per-player logic needed.
+
+async function generateSessionPoems(gameSessionId: number) {
+  const { whatIsPool, itIsPool } = await getSessionPool(gameSessionId);
+
+  const shuffledWhatIs = shuffle(whatIsPool);
+  const shuffledItIs = shuffle(itIsPool);
+  const count = Math.min(shuffledWhatIs.length, shuffledItIs.length);
+
+  if (count === 0) return [];
+  const pairings = Array.from({ length: count }, (_, i) => ({
+    whatIsId: shuffledWhatIs[i].id,
+    itIsId: shuffledItIs[i].id,
+  }));
+
+  return db.insert(poems).values(pairings).returning();
 }
 
 // ---- 3.4b reshufflePoems ----
@@ -181,7 +179,13 @@ export async function reshufflePoems(submissionId: number, window: TimeWindow = 
 
 // ---- 3.5 getResults ----
 
-export async function getResults(submissionId: number) {
+export async function getResults(submissionId: number, isSession = false) {
+  // Solo: show poems where either side is the player's card (two loops → both sides matter)
+  // Session: show poems where the player's what-is is the left side (global pairing)
+  const condition = isSession
+    ? eq(whatIs.submissionId, submissionId)
+    : or(eq(whatIs.submissionId, submissionId), eq(itIs.submissionId, submissionId));
+
   return db
     .select({
       poemId: poems.id,
@@ -191,7 +195,7 @@ export async function getResults(submissionId: number) {
     .from(poems)
     .innerJoin(whatIs, eq(poems.whatIsId, whatIs.id))
     .innerJoin(itIs, eq(poems.itIsId, itIs.id))
-    .where(or(eq(whatIs.submissionId, submissionId), eq(itIs.submissionId, submissionId)))
+    .where(condition)
     .orderBy(poems.id);
 }
 
@@ -276,14 +280,7 @@ export async function startSession(code: string) {
     .set({ status: "active" })
     .where(eq(gameSessions.id, session.id));
 
-  const sessionSubmissions = await db
-    .select()
-    .from(submissions)
-    .where(eq(submissions.gameSessionId, session.id));
-
-  for (const sub of sessionSubmissions) {
-    await generatePoems(sub.id, "all", session.id);
-  }
+  await generateSessionPoems(session.id);
 
   return session.id;
 }
