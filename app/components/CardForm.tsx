@@ -56,7 +56,8 @@ export default function CardForm() {
     if (!current.text.trim()) return;
 
     const text = current.text.trim();
-    const finalText = text.endsWith("?") ? text : text + "?";
+    const suffix = phase === "it" ? "." : "?";
+    const finalText = /[?.!]$/.test(text) ? text : text + suffix;
 
     const updated = cards.map((c, i) =>
       i === activeIndex ? { ...c, text: finalText, done: true } : c
@@ -118,8 +119,8 @@ export default function CardForm() {
   }
 
   const isItPhase = phase === "it";
-  const cardColor = isItPhase ? "var(--card-it)" : "var(--card-what)";
-  const cardColorDark = isItPhase ? "var(--card-it-dark)" : "var(--card-what-dark)";
+  const cardColor = "var(--card-what)";
+  const cardColorDark = "var(--card-what-dark)";
   const label = isItPhase ? "it is" : "what is";
   const allDone = cards.every((c) => c.done);
 
@@ -262,7 +263,7 @@ export default function CardForm() {
                 value={cards[activeIndex]?.text ?? ""}
                 onChange={(e) => handleTextChange(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="...?"
+                placeholder={isItPhase ? "..." : "...?"}
                 className="flex-1 bg-transparent outline-none placeholder-opacity-40 resize-none overflow-hidden"
                 style={{ color: "var(--text)", fontFamily: "var(--font-hand)", fontSize: "1.25rem", lineHeight: "1.5", caretColor: cardColorDark, position: "relative", top: "-10px" }}
               />
