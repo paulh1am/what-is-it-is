@@ -175,6 +175,9 @@ export default function CardForm({ gameSessionId, onSubmitComplete }: CardFormPr
       {/* Header — solo mode only */}
       {!sessionMode && (
         <div className="mb-12 text-center">
+          <div className="mb-4">
+            <PlayLiveButton />
+          </div>
           <h1
             className="text-3xl mb-1 tracking-tight"
             style={{ fontFamily: "var(--font-serif)", color: "var(--text)" }}
@@ -241,13 +244,6 @@ export default function CardForm({ gameSessionId, onSubmitComplete }: CardFormPr
               ))}
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Play live — fixed top right */}
-      {!sessionMode && (
-        <div className="fixed top-4 right-4" style={{ zIndex: 50 }}>
-          <PlayLiveButton />
         </div>
       )}
 

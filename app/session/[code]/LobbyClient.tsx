@@ -23,6 +23,7 @@ export function LobbyClient({
   const [status, setStatus] = useState(initialStatus);
   const [submissionId, setSubmissionId] = useState<number | null>(null);
   const [starting, setStarting] = useState(false);
+  const [confirmExit, setConfirmExit] = useState(false);
   const submissionIdRef = useRef<number | null>(null);
 
   // Keep ref in sync so the polling interval can read latest value
@@ -66,6 +67,39 @@ export function LobbyClient({
 
   return (
     <div className="flex flex-col items-center w-full">
+      {/* Exit button — top left */}
+      <div className="fixed top-4 left-4" style={{ zIndex: 50 }}>
+        {confirmExit ? (
+          <span style={{ fontFamily: "var(--font-serif)", fontSize: "0.85rem", color: "var(--text)" }}>
+            exit game?{" "}
+            <button
+              onClick={() => router.push("/")}
+              style={{ color: "var(--text)", textDecoration: "underline", cursor: "pointer" }}
+            >
+              yes
+            </button>
+            {" · "}
+            <button
+              onClick={() => setConfirmExit(false)}
+              style={{ color: "var(--text-muted)", cursor: "pointer" }}
+            >
+              no
+            </button>
+          </span>
+        ) : (
+          <button
+            onClick={() => setConfirmExit(true)}
+            style={{
+              fontFamily: "var(--font-serif)",
+              fontSize: "0.85rem",
+              color: "var(--text-muted)",
+              cursor: "pointer",
+            }}
+          >
+            ← exit
+          </button>
+        )}
+      </div>
       {/* Player count */}
       <div
         className="w-full max-w-sm mb-8 flex items-center justify-between"

@@ -19,11 +19,16 @@ export function PlayLiveButton() {
     <button
       onClick={handleClick}
       disabled={loading}
-      className="text-sm transition-opacity disabled:opacity-40"
+      className="text-xs transition-opacity disabled:opacity-40"
       style={{
-        color: "var(--text-muted)",
+        color: "var(--text)",
         fontFamily: "var(--font-serif)",
         fontStyle: "italic",
+        border: "1px solid var(--text)",
+        borderRadius: "6px",
+        padding: "4px 14px",
+        background: "var(--card-it)",
+        cursor: loading ? "default" : "pointer",
       }}
     >
       {loading ? "creating game..." : "play live →"}
