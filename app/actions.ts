@@ -2,7 +2,7 @@
 
 import { db } from "@/db";
 import { submissions, whatIs, itIs, poems } from "@/db/schema";
-import { eq, gte } from "drizzle-orm";
+import { eq, gte, or } from "drizzle-orm";
 
 // ---- Types ----
 
@@ -12,9 +12,23 @@ export type CardBatch = {
   itIsCards: string[];
 };
 
+// ---- Validation ----
+
+function isValidCard(text: string): boolean {
+  const t = text.trim();
+  if (t.length <= 1) return false;
+  if (!/[a-zA-Z]/.test(t)) return false;
+  if (/^test[?.!]?$/i.test(t)) return false;
+  return true;
+}
+
 // ---- 3.2 saveSubmission ----
 
 export async function saveSubmission(batch: CardBatch) {
+  const allCards = [...batch.whatIsCards, ...batch.itIsCards];
+  if (allCards.some((text) => !isValidCard(text))) {
+    throw new Error("One or more cards failed validation.");
+  }
   const [submission] = await db
     .insert(submissions)
     .values({ sessionToken: batch.sessionToken })
@@ -114,7 +128,23 @@ export async function generatePoems(
   return inserted;
 }
 
-// ---- 3.5 likePoem ----
+// ---- 3.5 getResults ----
+
+export async function getResults(submissionId: number) {
+  return db
+    .select({
+      poemId: poems.id,
+      whatIsText: whatIs.text,
+      itIsText: itIs.text,
+    })
+    .from(poems)
+    .innerJoin(whatIs, eq(poems.whatIsId, whatIs.id))
+    .innerJoin(itIs, eq(poems.itIsId, itIs.id))
+    .where(or(eq(whatIs.submissionId, submissionId), eq(itIs.submissionId, submissionId)))
+    .orderBy(poems.id);
+}
+
+// ---- 3.6 likePoem ----
 
 export async function likePoem(poemId: number) {
   await db
