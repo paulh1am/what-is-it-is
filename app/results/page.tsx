@@ -66,7 +66,7 @@ export default async function ResultsPage({
             className="text-sm"
             style={{ color: "var(--text)", fontFamily: "var(--font-serif)", fontStyle: "italic" }}
           >
-            see all poems from this game →
+            see all results from this game →
           </Link>
         )}
         {!session && <ReshuffleButton submissionId={submissionId} window={timeWindow} />}

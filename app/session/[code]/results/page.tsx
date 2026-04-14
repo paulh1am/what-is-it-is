@@ -20,7 +20,7 @@ export default async function SessionResultsPage({
           className="text-3xl mb-1 tracking-tight"
           style={{ fontFamily: "var(--font-serif)", color: "var(--text)" }}
         >
-          all poems
+          all results
         </h1>
         <p
           style={{
@@ -30,7 +30,7 @@ export default async function SessionResultsPage({
             fontFamily: "var(--font-serif)",
           }}
         >
-          game {code} · {results.length} poem{results.length !== 1 ? "s" : ""}
+          game {code} · {results.length} result{results.length !== 1 ? "s" : ""}
         </p>
       </div>
 
@@ -42,7 +42,7 @@ export default async function SessionResultsPage({
             fontStyle: "italic",
           }}
         >
-          no poems yet — poems are generated when the host starts the game.
+          no results yet — results are generated when the host starts the game.
         </p>
       ) : (
         <div className="w-full max-w-sm flex flex-col gap-6">

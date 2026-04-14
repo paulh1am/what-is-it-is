@@ -110,7 +110,7 @@ export async function generatePoems(
   window: TimeWindow = "all",
   gameSessionId?: number
 ) {
-  const { whatIsPool, itIsPool } = gameSessionId
+  const { itIsPool } = gameSessionId
     ? await getSessionPool(gameSessionId)
     : await getPairingPool(window);
 
@@ -119,34 +119,38 @@ export async function generatePoems(
     .from(whatIs)
     .where(eq(whatIs.submissionId, submissionId));
 
-  const myItIs = await db
-    .select()
-    .from(itIs)
-    .where(eq(itIs.submissionId, submissionId));
-
-  // Always prefer other players' cards; fall back to own only if no others exist in the pool
-  const othersWhatIs = whatIsPool.filter((w) => w.submissionId !== submissionId);
   const othersItIs = itIsPool.filter((i) => i.submissionId !== submissionId);
-
-  const whatIsCandidates = othersWhatIs.length > 0 ? othersWhatIs : whatIsPool;
-  const itIsCandidates = othersItIs.length > 0 ? othersItIs : itIsPool;
 
   const shuffle = <T>(arr: T[]): T[] =>
     [...arr].sort(() => Math.random() - 0.5);
 
-  const shuffledItIs = shuffle(itIsCandidates);
-  const shuffledWhatIs = shuffle(whatIsCandidates);
+  const shuffledOthers = shuffle(othersItIs);
+  const shuffledAll = shuffle(itIsPool);
+
+  // In session mode: blend based on player count so cross-pollination feels intentional.
+  // 2-player game → prefer others 3/4 of draws; 3+ players → 1/2.
+  // Solo mode → always prefer others, fall back to own only if pool is empty.
+  const otherPlayerCount = new Set(othersItIs.map((i) => i.submissionId)).size;
+  const otherRatio = !gameSessionId
+    ? 1
+    : otherPlayerCount === 1
+    ? 0.75
+    : 0.5;
+
+  // Build a deduplicated pool of the right size:
+  // take ~otherRatio of slots from others, fill the rest from remaining cards, then shuffle.
+  const targetOtherCount = Math.round(myWhatIs.length * otherRatio);
+  const fromOthers = shuffledOthers.slice(0, Math.min(targetOtherCount, shuffledOthers.length));
+  const usedIds = new Set(fromOthers.map((c) => c.id));
+  const fromRemainder = shuffledAll.filter((c) => !usedIds.has(c.id));
+  const needed = Math.max(0, myWhatIs.length - fromOthers.length);
+  const finalPool = shuffle([...fromOthers, ...fromRemainder.slice(0, needed)]);
 
   const pairings: { whatIsId: number; itIsId: number }[] = [];
 
   myWhatIs.forEach((w, i) => {
-    const match = shuffledItIs[i % shuffledItIs.length];
+    const match = finalPool[i];
     if (match) pairings.push({ whatIsId: w.id, itIsId: match.id });
-  });
-
-  myItIs.forEach((it, i) => {
-    const match = shuffledWhatIs[i % shuffledWhatIs.length];
-    if (match) pairings.push({ whatIsId: match.id, itIsId: it.id });
   });
 
   if (pairings.length === 0) return [];

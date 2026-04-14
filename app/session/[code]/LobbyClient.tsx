@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { getSessionStatus, startSession } from "@/app/actions";
 import CardForm from "@/app/components/CardForm";
@@ -23,25 +23,35 @@ export function LobbyClient({
   const [status, setStatus] = useState(initialStatus);
   const [submissionId, setSubmissionId] = useState<number | null>(null);
   const [starting, setStarting] = useState(false);
+  const submissionIdRef = useRef<number | null>(null);
 
-  const poll = useCallback(async () => {
-    const result = await getSessionStatus(code);
-    if (!result) return;
-    setPlayerCount(result.playerCount);
-    setStatus(result.status as "waiting" | "active");
-    if (result.status === "active" && submissionId) {
-      router.push(`/results?id=${submissionId}&session=${code}`);
-    }
-  }, [code, submissionId, router]);
-
+  // Keep ref in sync so the polling interval can read latest value
   useEffect(() => {
-    if (status === "active" && submissionId) {
-      router.push(`/results?id=${submissionId}&session=${code}`);
-      return;
-    }
-    const interval = setInterval(poll, 3000);
+    submissionIdRef.current = submissionId;
+  }, [submissionId]);
+
+  // Polling — only depends on code (stable), never restarts
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      const result = await getSessionStatus(code);
+      if (!result) return;
+      setPlayerCount(result.playerCount);
+      setStatus(result.status as "waiting" | "active");
+    }, 3000);
     return () => clearInterval(interval);
-  }, [status, submissionId, poll, router, code]);
+  }, [code]);
+
+  // Redirect when session goes active
+  useEffect(() => {
+    if (status === "active") {
+      const id = submissionIdRef.current;
+      if (id) {
+        router.push(`/results?id=${id}&session=${code}`);
+      } else {
+        router.push(`/session/${code}/results`);
+      }
+    }
+  }, [status, code, router]);
 
   async function handleStart() {
     if (starting || playerCount < 2) return;
@@ -73,7 +83,7 @@ export function LobbyClient({
             className="px-4 py-1.5 rounded-lg text-sm font-medium transition-opacity disabled:opacity-40"
             style={{ background: "var(--text)", color: "var(--bg)", fontFamily: "var(--font-serif)" }}
           >
-            {starting ? "starting..." : "generate poems →"}
+            {starting ? "starting..." : "generate results →"}
           </button>
         )}
       </div>
@@ -85,7 +95,7 @@ export function LobbyClient({
           style={{ color: "var(--text-muted)", fontFamily: "var(--font-serif)", fontStyle: "italic" }}
         >
           <p className="mb-2">your cards are in.</p>
-          <p style={{ fontSize: "0.85rem" }}>waiting for the host to generate poems...</p>
+          <p style={{ fontSize: "0.85rem" }}>waiting for the host to generate results...</p>
           {playerCount >= 2 && (
             <button
               onClick={handleStart}
@@ -93,7 +103,7 @@ export function LobbyClient({
               className="mt-6 px-4 py-1.5 rounded-lg text-sm font-medium transition-opacity disabled:opacity-40"
               style={{ background: "var(--text)", color: "var(--bg)", fontFamily: "var(--font-serif)" }}
             >
-              {starting ? "starting..." : "generate poems →"}
+              {starting ? "starting..." : "generate results →"}
             </button>
           )}
         </div>
