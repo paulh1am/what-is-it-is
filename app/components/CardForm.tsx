@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { saveSubmission, generatePoems } from "@/app/actions";
+import { PlayLiveButton } from "./PlayLiveButton";
 
 type Phase = "what" | "it";
 type TimeWindow = "all" | "year" | "month" | "week";
@@ -240,6 +241,13 @@ export default function CardForm({ gameSessionId, onSubmitComplete }: CardFormPr
               ))}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Play live — fixed top right */}
+      {!sessionMode && (
+        <div className="fixed top-4 right-4" style={{ zIndex: 50 }}>
+          <PlayLiveButton />
         </div>
       )}
 
